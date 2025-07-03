@@ -1,1 +1,2 @@
-# padme-fw-for-crilin
+# padme
+PADME experiment software repository
