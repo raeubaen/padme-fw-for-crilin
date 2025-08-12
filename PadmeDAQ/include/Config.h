@@ -81,6 +81,9 @@ typedef struct config_s {
 
   // DB id of node where this process is running
   int node_id;
+ 
+  // Board optical connection system (can be A3818 or A4818)
+  char conet2_mode[16];
 
   // Board optical connection info (port and slot of A3818 board)
   int conet2_link;

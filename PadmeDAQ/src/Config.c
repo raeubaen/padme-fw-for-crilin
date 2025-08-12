@@ -67,6 +67,8 @@ int reset_config()
 
   Config->board_sn = 0; // Default to dummy board serial number
 
+  strcpy(Config->conet2_mode,"A3818"); // Use A3818 communication board by default
+
   // Use board_id as default to set connection info
   Config->node_id = -1;
   Config->conet2_link = -1;
@@ -337,14 +339,21 @@ int read_config(char *cfgfile)
 	} else {
 	  printf("WARNING - Could not parse value %s to number in line:\n%s\n",value,line);
 	}
+      } else if ( strcmp(param,"conet2_mode")==0 ) {
+	if ( strlen(value)<16 ) {
+	  strcpy(Config->conet2_mode,value);
+	  printf("Parameter %s set to '%s'\n",param,value);
+	} else {
+	  printf("WARNING - conet2_mode string too long (%lu characters): %s\n",strlen(value),value);
+	}
       } else if ( strcmp(param,"conet2_link")==0 ) {
 	if ( sscanf(value,"%d",&v) ) {
-	  if (v<MAX_N_CONET2_LINKS) {
-	    Config->conet2_link = v;
-	    printf("Parameter %s set to %d\n",param,v);
-	  } else {
-	    printf("WARNING - conet2_link set to %d, must be < %d\n",v,MAX_N_CONET2_LINKS);
-	  }
+	  //if (v<MAX_N_CONET2_LINKS) {
+	  Config->conet2_link = v;
+	  printf("Parameter %s set to %d\n",param,v);
+	  //} else {
+	  //  printf("WARNING - conet2_link set to %d, must be < %d\n",v,MAX_N_CONET2_LINKS);
+	  //}
 	} else {
 	  printf("WARNING - Could not parse value %s to number in line:\n%s\n",value,line);
 	}
@@ -672,6 +681,8 @@ int print_config(){
 
   printf("board_id\t\t%d\t\tboard ID\n",Config->board_id);
   printf("node_id\t\t\t%d\t\tDB id of node running the process\n",Config->node_id);
+
+  printf("conet2_mode\t\t'%s'\t\tCONET2 mode\n",Config->conet2_mode);
   printf("conet2_link\t\t%d\t\tCONET2 link\n",Config->conet2_link);
   printf("conet2_slot\t\t%d\t\tCONET2 slot\n",Config->conet2_slot);
 

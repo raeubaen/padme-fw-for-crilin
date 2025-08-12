@@ -1,0 +1,423 @@
+#include "Riostream.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <vector>
+#include <algorithm>
+#include <sys/stat.h>
+
+#include "TRandom.h"
+#include "TMarker.h"
+#include "TLine.h"
+#include "TCanvas.h"
+#include "TDirectory.h"
+#include "TFile.h"
+#include "TChain.h"
+#include "TTree.h"
+#include "TBranch.h"
+#include "TObjArray.h"
+#include "TH1S.h"
+#include "TProfile.h"
+#include "TMath.h"
+#include "TGraphErrors.h"
+#include "TSpline.h"
+#include "TRawEvent.hh"
+#include "TF1.h"
+#include "TButton.h"
+#include "pars.h"
+#include <TSystem.h>
+#include "TObjString.h"
+
+#define NTUPLE_N_BOARDS 2
+#define NTUPLE_N_CHANNELS 32
+#define NTUPLE_N_TRIGGER 4
+#define VPP 1.
+
+
+struct Eve{
+  Int_t NTNevent;
+  Float_t NTQCh[NTUPLE_N_BOARDS][NTUPLE_N_CHANNELS];
+  Float_t NTPedCh[NTUPLE_N_BOARDS][NTUPLE_N_CHANNELS];
+  Float_t NTVMax[NTUPLE_N_BOARDS][NTUPLE_N_CHANNELS];
+  Float_t NTTMax[NTUPLE_N_BOARDS][NTUPLE_N_CHANNELS];
+  Short_t Waves[NTUPLE_N_BOARDS][NTUPLE_N_CHANNELS][1000];
+  Short_t NTWaveTrig[NTUPLE_N_BOARDS][NTUPLE_N_TRIGGER][1000];
+
+  Int_t NTTrigMask;
+};
+
+
+int main(int argc, char* argv[])
+{
+
+  int c;
+  int verbose = 0;
+  int nevents = 0;
+
+  TString inputFileName;
+  TObjArray inputFileNameList;
+  struct stat filestat;
+
+  TString outputFileName = "RawHisto.root";
+  Int_t event;
+  std::vector<UInt_t> events;
+  Int_t board;
+  std::vector<UInt_t> boards;
+
+  // Parse options
+  while ((c = getopt (argc, argv, "i:l:o:n:e:b:vh")) != -1) {
+    switch (c)
+      {
+      case 'i':
+        inputFileNameList.Add(new TObjString(optarg));
+        fprintf(stdout,"Added input data file '%s'\n",optarg);
+	      break;
+      case 'l':
+        if ( stat(Form(optarg),&filestat) == 0 ) {
+          fprintf(stdout,"Reading list of input files from '%s'\n",optarg);
+          std::ifstream inputList(optarg);
+          while( inputFileName.ReadLine(inputList) ){
+            if ( stat(Form(inputFileName.Data()),&filestat) == 0 ) {
+              inputFileNameList.Add(new TObjString(inputFileName.Data()));
+              fprintf(stdout,"Added input data file '%s'\n",inputFileName.Data());
+            } else {
+              fprintf(stdout,"WARNING: file '%s' is not accessible\n",inputFileName.Data());
+            }
+          }
+        } else {
+          fprintf(stdout,"WARNING: file list '%s' is not accessible\n",optarg);
+        }
+        break;
+      case 'o':
+        outputFileName = optarg;
+        fprintf(stdout,"Output histogram file set to '%s'\n",optarg);
+	      break;
+      case 'n':
+        if ( sscanf(optarg,"%d",&nevents) != 1 ) {
+          fprintf (stderr, "Error while processing option '-n'. Wrong parameter '%s'.\n", optarg);
+          exit(1);
+        }
+        if (nevents<0) {
+          fprintf (stderr, "Error while processing option '-n'. Required %d events (must be >=0).\n", nevents);
+          exit(1);
+        }
+        if (nevents) {
+          fprintf(stdout,"Will read first %d events in file\n",nevents);
+        } else {
+          fprintf(stdout,"Will read all events in file\n");
+        }
+        break;
+      case 'e':
+        if ( sscanf(optarg,"%d",&event) != 1 ) {
+          fprintf (stderr, "Error while processing option '-e'. Wrong parameter '%s'.\n", optarg);
+          exit(1);
+        }
+        if (event<0) {
+          fprintf (stderr, "Error while processing option '-e'. Required event %d (must be >=0).\n", event);
+          exit(1);
+        }
+        events.push_back(event);
+        fprintf(stdout,"Added event %d to list\n",event);
+        break;
+      case 'b':
+        if ( sscanf(optarg,"%d",&board) != 1 ) {
+          fprintf (stderr, "Error while processing option '-b'. Wrong parameter '%s'.\n", optarg);
+          exit(1);
+        }
+        if (board<0 || board>31) {
+          fprintf (stderr, "Error while processing option '-b'. Required board %d (must be 0<=board<=31).\n", board);
+          exit(1);
+        }
+        boards.push_back(board);
+        fprintf(stdout,"Added board %d to list\n",board);
+        break;
+      case 'v':
+	      verbose++;
+        break;
+      case 'h':
+        fprintf(stdout,"\nRawHisto [-i <file>] [-l <list>] [-o <file>] [-n <n>] [-e <event>] [-b <board>] [-v <level>] [-h]\n\n");
+        fprintf(stdout,"  -i: add a file to list of input files (can be repeated)\n");
+        fprintf(stdout,"  -l: specify text file with list of input files (one file per line)\n");
+        fprintf(stdout,"  -o: define the name of the output file (default: %s)\n",outputFileName.Data());
+        fprintf(stdout,"  -n: total number of events to save to output file (default: 0 i.e. no limit)\n");
+        fprintf(stdout,"  -e: add <event> to list of events to save to output file (can be repeated)\n");
+        fprintf(stdout,"  -b: add <board> to list of boards to save to output file (can be repeated)\n");
+        fprintf(stdout,"  -v: enable verbose output (repeat for more output)\n");
+        fprintf(stdout,"  -h: show this help message and exit\n\n");
+        fprintf(stdout,"N.B. if no -e/-b options are specified, then all events/boards will be saved to the output file\n\n");
+        exit(0);
+      case '?':
+        if (optopt == 'i' || optopt == 'l' || optopt == 'o' || optopt == 'n' || optopt == 'e' || optopt == 'b')
+                fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+              else if (isprint(optopt))
+                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+              else
+                fprintf (stderr,"Unknown option character `\\x%x'.\n",optopt);
+              exit(1);
+            default:
+              abort();
+            }
+    }
+
+    if ( inputFileNameList.GetEntries() == 0 ) {
+      fprintf(stderr,"ERROR - Input file list is empty\n");
+      exit(1);
+    }
+
+    if (verbose) fprintf(stdout,"Set verbose level to %d\n",verbose);
+
+    // Create chain of input files
+    fprintf(stdout,"=== === === Chain of input files === === ===\n");
+    TChain* inputChain = new TChain("RawEvents");
+    for (Int_t iFile = 0; iFile < inputFileNameList.GetEntries(); iFile++) {
+      fprintf(stdout,"%4d %s\n",iFile,((TObjString*)inputFileNameList.At(iFile))->GetString().Data());
+      inputChain->AddFile(((TObjString*)inputFileNameList.At(iFile))->GetString());
+    }
+    if (inputChain->GetEntries() == 0) {
+      perror(Form("ERROR No events found for tree 'RawEvents' in input chain"));
+      exit(1);
+    }
+
+    // Get some info about the input chain
+    Int_t runNEntries = inputChain->GetEntries();
+    std::cout << "Found Tree 'RawEvents' with " << runNEntries << " entries" << std::endl;
+    TRawEvent* rawEv = new TRawEvent();
+    inputChain->SetBranchAddress("RawEvent",&rawEv);
+
+    
+    // Create ntuple
+    Eve Event; 
+  
+    TTree* tree = new TTree("NTU","Event3");
+    tree->Branch("Nevent",&(Event.NTNevent),"Nevent/I");
+    tree->Branch("QCh",&(Event.NTQCh),Form("QCh[%d][%d]/D",NTUPLE_N_BOARDS,NTUPLE_N_CHANNELS));
+    tree->Branch("PedCh",&(Event.NTPedCh),Form("PedCh[%d][%d]/D,",NTUPLE_N_BOARDS,NTUPLE_N_CHANNELS));
+    tree->Branch("VMax",&(Event.NTVMax),Form("VMax[%d][%d]/D",NTUPLE_N_BOARDS,NTUPLE_N_CHANNELS));
+    tree->Branch("TMax",&(Event.NTTMax),Form("TMax[%d][%d]/D",NTUPLE_N_BOARDS,NTUPLE_N_CHANNELS));
+    tree->Branch("TrigMask",&(Event.NTTrigMask),Form("TrigMask/I"));
+    tree->Branch("Waves",&(Event.Waves), Form("Waves[%d][%d][1000]/S",NTUPLE_N_BOARDS,NTUPLE_N_CHANNELS));
+    tree->Branch("WavesTrig",&(Event.NTWaveTrig),Form("WavesTrig[%d][%d][1000]/S",NTUPLE_N_BOARDS,NTUPLE_N_TRIGGER));
+
+    // Create output file for histograms
+    TFile* histoFile = new TFile(outputFileName,"RECREATE");
+    if(!histoFile) {
+      fprintf(stderr,"ERROR - Cannot create output file %s\n",outputFileName.Data());
+      exit(1);
+    }
+
+    TString specimens = "specimens";
+    histoFile->mkdir(specimens);
+
+
+    // Define parameters for signal analysis
+    
+    Float_t Sam[1000];
+    Float_t AbsSamRec[1000];
+    
+    Int_t readEvt = 0;
+    for(Int_t iev=0;iev<runNEntries;iev++){
+      // Read event
+    
+
+      Bool_t Saturated=false;
+        
+      inputChain->GetEntry(iev);
+      // Check if this event number was selected
+      Int_t runNumber = rawEv->GetRunNumber();
+      Int_t evtNumber = rawEv->GetEventNumber();
+      if ( (events.size() > 0) && (std::count(events.begin(),events.end(),evtNumber) == 0) ) continue;
+      readEvt++;
+      if ( nevents && (readEvt>nevents) ) {
+        printf("- Read %d event(s): stopping here\n",nevents);
+        break;
+      }
+
+      // Show some activity meter
+      if ( readEvt % 100 == 0 ) printf("Run: %7d ------> Processing event: %8d/%d (%.0f%%)\n",runNumber,readEvt,runNEntries,(float)(100*readEvt/runNEntries) );
+
+      // Get event trigger mask and select cosmics events*****cambiato, accetto solo i random
+      UInt_t trigMask = rawEv->GetEventTrigMask();
+      if ( !(trigMask & 0x02) ) continue; //da rimettere
+      
+      Event.NTTrigMask= trigMask;
+      
+      
+      // Loop over boards, ORA NON SERVE
+      for(UChar_t b=0;b<rawEv->GetNADCBoards();b++){
+
+        
+
+
+        // Check if this board was selected
+        Int_t brdId = rawEv->ADCBoard(b)->GetBoardId();
+        if ( (boards.size() > 0) && (std::count(boards.begin(),boards.end(),brdId) == 0) ) continue;
+
+        TADCBoard* adcB = rawEv->ADCBoard(b);
+        UChar_t nTrg = adcB->GetNADCTriggers();
+        UChar_t nChn = adcB->GetNADCChannels();
+          // Analyze signals
+        if (brdId == 0 || brdId == 1) { //da fare meno hardcoded
+
+          for(UChar_t c=0;c<nChn;c++){
+
+          TGraphErrors waveGra(NAvg-1);
+
+          int tStart= 250; //prima era 100
+          int tStop = 25;
+
+          Float_t Charge = 0.;
+          Float_t MaxHeight=5000;
+          Float_t MaxSample=0;
+          TADCChannel* chn = adcB->ADCChannel(c);
+          Float_t PedTemp=0;
+          UChar_t ch = chn->GetChannelNumber();
+          for(UShort_t s=0;s<NAvg;s++){
+            Sam[s] = (Short_t) chn->GetSample(s);
+            if( Sam[s]< MaxHeight){
+              MaxHeight = Sam[s];
+              MaxSample =  (Float_t) s;
+            }
+          }
+
+
+          // Check if channels has some signal (poor man zero suppression)
+          Float_t rms1000 = TMath::RMS(NAvg,&Sam[0]);
+
+          Float_t rms100 = TMath::RMS(NPed,&Sam[0]);
+
+          // Compute pedestal
+            
+          PedTemp  = TMath::Mean(NPed,&Sam[0]);
+          Float_t bFrom{0},bTo{0},blineSum{0},baseN{0};
+
+	  if(1) {
+	    bFrom = 0,  bTo = 150;
+	    for(Int_t s = bFrom; s < bTo; s++) {  
+              blineSum += Sam[s]; 
+              baseN++;
+            }
+            PedTemp = (Float_t) blineSum/(Float_t)baseN;
+          }
+	  
+
+          Float_t TatThre = -999;
+          // Get total charge and position of maximum
+          Float_t VMax = -999;
+          Float_t TMax = -999.;
+
+          for(UShort_t s=0;s<NAvg;s++){
+            Sam[s] = (Float_t) chn->GetSample(s);
+            //if(brdId == 0 && c ==31){ //eventuali segnali negativi
+            //  AbsSamRec[s] = VPP*(PedTemp-Sam[s])/4096.*1000.;//Signal in mV
+            //}else{
+	    AbsSamRec[s] = VPP*(Sam[s]-PedTemp)/4096.*1000.;//Signal in mV
+	    //}
+            
+            if (AbsSamRec[s] > VMax) {  
+              VMax = AbsSamRec[s];
+              TMax = (Float_t)s;
+            }
+            
+          } // end of loop on samples
+
+          //Check saturation HERE
+          if(VMax>FEEThre) Saturated = true;
+    
+          
+          
+
+          //Compute Charges
+
+          Int_t qStart = TMax-80/2.5; //PROVA 2.5GS
+          Int_t qStop = TMax+200/2.5;   //it will be needed a different window for tagger and SiPMs
+	  //Int_t qStart = TMax-200/2.5; //PROVA 2.5GS                                                                    
+          //Int_t qStop = TMax+600/2.5; 
+          for(UShort_t t=0;t<NAvg;t++){
+              if(t> qStart && t<qStop){
+              Charge += AbsSamRec[t]*1e-3/fImpedance*fTimeBin/1E-12; //Charge in pC
+              }
+            }
+
+
+          Int_t idx = brdId;
+
+
+          Event.NTQCh[idx][ch] = Charge;
+          Event.NTPedCh[idx][ch] = PedTemp;
+          Event.NTVMax[idx][ch] = VMax;
+          Event.NTTMax[idx][ch] = TMax * digiTime;
+
+          for(UShort_t t=0;t<1000;t++){
+            if(t<NAvg){
+              Event.Waves[idx][ch][t] = (Short_t) Sam[t];
+            }else{
+              Event.Waves[idx][ch][t] = 0;
+            }
+          }
+
+
+        } // end loop on channels
+
+        for(UChar_t t=0;t<nTrg;t++){
+
+          Int_t idx = brdId;
+
+          TGraphErrors waveGra(NAvg-1);
+
+
+          TADCTrigger* trg = adcB->ADCTrigger(t);
+          //UChar_t tr= trg->GetGroupNumber();
+          for(UShort_t s=0;s<NAvg;s++){
+            Sam[s] = (Float_t) trg->GetSample(s);
+          }
+
+	//   // Check if channels has some signal (poor man zero suppression)
+        //   Float_t rms1000 = TMath::RMS(NAvg,&Sam[0]);
+
+	//   if(rms1000<10 || trigMask>3) continue; //2 mV Zsupp on BGOs brd
+
+          // Compute pedestal
+          Float_t PedTemp = TMath::Mean(NPed,&Sam[0]);
+
+          for(UShort_t s=0;s<NAvg;s++){
+            Sam[s] = (Short_t) trg->GetSample(s);
+            AbsSamRec[s] = (PedTemp-Sam[s])/4096.*1000.;//Signal in mV
+            Event.NTWaveTrig[idx][t][s]= (Short_t) Sam[s];
+
+          } // end of loop on samples
+
+
+
+	}//end loop on triggers
+
+
+      } // end board selection
+
+    } // end loop on boards
+      
+    Event.NTNevent = iev;
+    
+    if(Saturated == false) tree->Fill();  //va fixato
+  
+
+    memset(&Event, 0, sizeof(Event));
+
+    // Clear event
+    rawEv->Clear("C");
+    
+  } // end loop on events
+
+
+  histoFile->cd();
+  
+  tree->Write();
+
+  // Save and close output file
+  printf("Closing output file\n");
+  printf("\t\t\t----------> root -l %s \n",outputFileName.Data());
+  histoFile->Close();
+
+  delete rawEv;
+
+  exit(0);
+
+}

@@ -7856,7 +7856,7 @@ nullptr
     };
     static const char* includePaths[] = {
 "/cvmfs/sft.cern.ch/lcg/app/releases/ROOT/6.34.04/x86_64-almalinux9.5-gcc115-opt/include/",
-"/afs/cern.ch/user/e/edimeco/padme-fw/PadmeRoot/",
+"/home/crilin/crilinDAQ/padme-fw/PadmeRoot/",
 nullptr
     };
     static const char* fwdDeclCode = R"DICTFWDDCLS(

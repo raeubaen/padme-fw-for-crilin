@@ -27,6 +27,8 @@ class RunControlServer:
         self.lock_file = self.daq_dir+"/run/lock"
         self.lus_file = self.daq_dir+"/setup/last_used_setup"
 
+        self.run_number_file = "%s/run/last_run_number"%self.daq_dir
+
         # Redefine print to send output to log file
         sys.stdout = Logger()
         sys.stderr = sys.stdout
@@ -54,10 +56,11 @@ class RunControlServer:
         #self.db = PadmeDB()
 
         # Get list of possible run types from DB
-        self.run_type_list = self.db.get_run_types()
-        if self.run_type_list == []:
-            print("WARNING - No run types found in DB. Using default.")
-            self.run_type_list = ['TEST','FAKE']
+#        self.run_type_list = self.db.get_run_types()
+#        if self.run_type_list == []:
+#            print("WARNING - No run types found in DB. Using default.")
+#            self.run_type_list = ['TEST','FAKE']
+        self.run_type_list = ['DAQ','CALIBRATION','PEDESTAL','TEST','OTHER']
         print("--- Known run types ---")
         print(self.run_type_list)
 
@@ -191,7 +194,7 @@ class RunControlServer:
         ret_exit = "terminate_ok"
         if ( self.current_state == "initialized" or self.current_state == "running" ):
 
-            self.run.final_status = self.db.DB_RUN_STATUS_ABORTED
+            self.run.final_status = 4 #self.db.DB_RUN_STATUS_ABORTED
             self.run.run_comment_end = "Run aborted due to RunControlServer SIGINT"
             #if (self.run.run_number):
             #    self.db.set_run_status(self.run.run_number,self.db.DB_RUN_STATUS_ABORTED)
@@ -214,7 +217,7 @@ class RunControlServer:
         # If a run is initialized/running, abort it as cleanly as possible
         if ( self.current_state == "initialized" or self.current_state == "running" ):
 
-            self.run.final_status = self.db.DB_RUN_STATUS_ABORTED
+            self.run.final_status = 4 #self.db.DB_RUN_STATUS_ABORTED
             self.run.run_comment_end = "Run aborted due to RunControlServer shutdown"
             #if (self.run.run_number):
             #    self.db.set_run_status(self.run.run_number,self.db.DB_RUN_STATUS_ABORTED)
@@ -290,7 +293,12 @@ class RunControlServer:
             elif (cmd == "get_trig_config"):
                 self.send_answer(self.get_trig_config())
             elif (cmd == "get_run_number"):
-                self.send_answer(str(self.db.get_last_run_in_db()))
+                try:
+                    with open(self.run_number_file,"r") as rnf:
+                        self.send_answer(rnf.read().rstrip())
+                except:
+                    print("RunControlServer::state_idel - ERROR - Cannot read run number from file %s"%self.run_number_file)
+                    self.send_answer("0")
             elif (cmd == "new_run"):
                 res = self.new_run()
                 if (res == "client_close"):
@@ -514,7 +522,7 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
         # First get length of string
         l = ""
         for i in range(5): # Max 99999 characters
-            ch = self.connection.recv(1)
+            ch = self.connection.recv(1).decode()
             if ch:
                 l += ch
             else:
@@ -525,7 +533,7 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
         # Then read the right amount of characters from the socket
         cmd = ""
         for i in range(ll):
-            ch = self.connection.recv(1)
+            ch = self.connection.recv(1).decode()
             if ch:
                 cmd += ch
             else:
@@ -539,7 +547,7 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
 
         if len(answer)<100000:
             print("Sending answer %s"%answer)
-            self.connection.sendall("%5.5d"%len(answer)+answer)
+            self.connection.sendall(("%5.5d"%len(answer)+answer).encode())
         else:
             print("Answer is too long: cannot send")
 
@@ -634,8 +642,15 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
         # Report current setup
         self.send_answer("setup %s"%self.run.setup)
 
-        # Assign number to new run using first free number in DB
-        newrun_number = self.db.get_last_run_in_db()+1
+        try:
+            with open(self.run_number_file,"r") as rnf:
+                lastrun_number = int(rnf.read().rstrip())
+        except:
+            print("RunControlServer::new_run - ERROR - Cannot read run number from file %s"%self.run_number_file)
+            return "error"
+        newrun_number = lastrun_number+1
+        with open(self.run_number_file,"w") as rnf:
+            rnf.write(str(newrun_number))
 
         # Retrieve run type. Accept only from list of known run types
         # Return run type used or "error" for invalid answer
@@ -904,7 +919,7 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
         print("Stopping run")
         #if (self.run.run_number):
         #    self.db.set_run_status(self.run.run_number,3) # Status 3: run stopped normally
-        self.run.final_status = self.db.DB_RUN_STATUS_END_OK
+        self.run.final_status = 3 #self.db.DB_RUN_STATUS_END_OK
 
         return self.terminate_run()
 
@@ -913,7 +928,7 @@ shutdown\t\t\tTell RunControl server to exit (use with extreme care!)"""
 
         print("Aborting run")
         self.run.run_comment_end = "Run aborted"
-        self.run.final_status = self.db.DB_RUN_STATUS_ABORTED
+        self.run.final_status = 4 #self.db.DB_RUN_STATUS_ABORTED
         #if (self.run.run_number):
         #    self.db.set_run_status(self.run.run_number,4) # Status 4: run aborted
 

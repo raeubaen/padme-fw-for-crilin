@@ -86,7 +86,7 @@ int reset_config()
   Config->trig6_scale_autopass = 1;
   Config->trig7_scale_autopass = 1;
 
-  strcpy(Config->output_mode,"STREAM"); // Default single stream mode
+  strcpy(Config->output_mode,"FILE"); // Default single stream mode
 
   strcpy(Config->output_stream,""); // No default
 

@@ -11,6 +11,7 @@
 #include "TObjArray.h"
 
 #include "TRawEvent.hh"
+#include "TObjString.h"
 
 int main(int argc, char* argv[])
 {

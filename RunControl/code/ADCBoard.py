@@ -31,6 +31,7 @@ class ADCBoard:
 
         self.node_id = 0
         self.node_ip = ""
+        self.conet2_mode = "A4s818"
         self.conet2_link = -1
         self.conet2_slot = -1
 
@@ -204,6 +205,7 @@ class ADCBoard:
 
         cfg_list.append(["node_id",              str(self.node_id)])
         cfg_list.append(["node_ip",              self.node_ip])
+        cfg_list.append(["conet2_mode",          self.conet2_mode])
         cfg_list.append(["conet2_link",          str(self.conet2_link)])
         cfg_list.append(["conet2_slot",          str(self.conet2_slot)])
 

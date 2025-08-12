@@ -13,6 +13,8 @@
 #include "TH1S.h"
 
 #include "ADCBoard.hh"
+#include "TObjString.h"
+
 
 TH1S* GetHisto(TString name, TObjArray histos) {
   for (Int_t iH = 0; iH < histos.GetEntries(); iH++) {

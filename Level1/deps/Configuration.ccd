@@ -1,0 +1,1 @@
+obj/Configuration.o: src/Configuration.cc include/Configuration.hh

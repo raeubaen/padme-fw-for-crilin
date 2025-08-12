@@ -74,14 +74,36 @@ int DAQ_connect ()
     printf("Unable to obtain ConetNode from board id\n");
     return 1;
   }
+  
+  if ( strcmp(Config->conet2_mode,"A3818") == 0 ) {
 
-  printf("- Connecting to CAEN digitizer board %d on link %d slot %d\n",Config->board_id,linkNum,conetNode);
+    printf("- Connecting to CAEN digitizer board %d on link %d slot %d using %s\n",Config->board_id,linkNum,conetNode,Config->conet2_mode);
 
-  // Open connection to digitizer and initialize Handle global variable
-  ret = CAEN_DGTZ_OpenDigitizer(CAEN_DGTZ_OpticalLink,linkNum,conetNode,0,&Handle);
-  if (ret != CAEN_DGTZ_Success) {
-    printf("Unable to connect to digitizer. Error code: %d\n",ret);
+    // Open connection to digitizer and initialize Handle global variable
+    ret = CAEN_DGTZ_OpenDigitizer(CAEN_DGTZ_OpticalLink,linkNum,conetNode,0,&Handle);
+    if (ret != CAEN_DGTZ_Success) {
+      printf("Unable to connect to digitizer. Error code: %d\n",ret);
+      return 1;
+    }
+
+  } else if ( strcmp(Config->conet2_mode,"A4818") == 0 ) {
+
+    printf("- Connecting to CAEN digitizer board %d on link %d slot %d using %s\n",Config->board_id,linkNum,conetNode,Config->conet2_mode);
+
+    // Open connection to digitizer and initialize Handle global variable
+    printf("- Opening connection to A4818 module at %s\n",format_time(time(0)));
+    ret = CAEN_DGTZ_OpenDigitizer(CAEN_DGTZ_USB_A4818,linkNum,conetNode,0,&Handle);
+    if (ret != CAEN_DGTZ_Success) {
+      printf("Unable to connect to digitizer. Error code: %d\n",ret);
+      return 1;
+    }
+    printf("- Connection to A4818 module opened at %s\n",format_time(time(0)));
+
+  } else {
+
+    printf(" Unable to connect to digitizer. Unknown CONET2 connection mode: '%s'.\n",Config->conet2_mode);
     return 1;
+
   }
 
   // Set signal handlers to make sure digitizer is reset before exiting
@@ -122,6 +144,8 @@ int DAQ_init ()
   uint32_t kk;
 
   InBurst = 0;
+
+  printf("- Starting ADC initialization at %s\n",format_time(time(0)));
 
   // Reset digitizer to its default values
   printf("- Resetting digitizer\n");
@@ -567,6 +591,7 @@ int DAQ_init ()
 
   // Initializiation finished. Digitizer is ready for acquisition.
   printf("- Digitizer initialization successful\n");
+  printf("- Ending ADC initialization at %s\n",format_time(time(0)));
   return 0;
 
 }

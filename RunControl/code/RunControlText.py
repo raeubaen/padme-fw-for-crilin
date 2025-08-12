@@ -35,7 +35,7 @@ class RunControlText:
         # First get length of string
         l = ""
         for i in range(5): # Max 99999 characters
-            ch = self.sock.recv(1)
+            ch = self.sock.recv(1).decode()
             if ch:
                 l += ch
             else:
@@ -45,7 +45,7 @@ class RunControlText:
         # Then read the right amount of characters from the socket
         ans = ""
         for i in range(ll):
-            ch = self.sock.recv(1)
+            ch = self.sock.recv(1).decode()
             if ch:
                 ans += ch
             else:
@@ -56,7 +56,7 @@ class RunControlText:
     def send_command(self,cmd):
 
         if len(cmd)<100000:
-            self.sock.sendall("%5.5d"%len(cmd)+cmd)
+            self.sock.sendall(("%5.5d"%len(cmd)+cmd).encode())
         else:
             self.error_exit("Command too long: cannot send")
 
